@@ -1154,8 +1154,15 @@ static SPI_MASTER_ISR_ATTR esp_err_t check_trans_valid(spi_device_handle_t handl
         SPI_CHECK(trans_desc->length <= SPI_LL_DMA_MAX_BIT_LEN, "txdata transfer > hardware max supported len", ESP_ERR_INVALID_ARG);
         SPI_CHECK(trans_desc->rxlength <= SPI_LL_DMA_MAX_BIT_LEN, "rxdata transfer > hardware max supported len", ESP_ERR_INVALID_ARG);
     } else {
+#ifdef MICROPY_QEMU
+        /* QEMU: Allow larger transfers - emulated SPI doesn't have HW buffer limit */
+        uint32_t cpu_max_bits = bus_attr->max_transfer_sz > 64 ? bus_attr->max_transfer_sz * 8 : SPI_LL_CPU_MAX_BIT_LEN;
+        SPI_CHECK(trans_desc->length <= cpu_max_bits, "txdata transfer > hardware max supported len", ESP_ERR_INVALID_ARG);
+        SPI_CHECK(trans_desc->rxlength <= cpu_max_bits, "rxdata transfer > hardware max supported len", ESP_ERR_INVALID_ARG);
+#else
         SPI_CHECK(trans_desc->length <= SPI_LL_CPU_MAX_BIT_LEN, "txdata transfer > hardware max supported len", ESP_ERR_INVALID_ARG);
         SPI_CHECK(trans_desc->rxlength <= SPI_LL_CPU_MAX_BIT_LEN, "rxdata transfer > hardware max supported len", ESP_ERR_INVALID_ARG);
+#endif
     }
     if (esp_ptr_external_ram(trans_desc->tx_buffer) || esp_ptr_external_ram(trans_desc->rx_buffer)) {
         SPI_CHECK(spi_flash_cache_enabled(), "Using PSRAM must when cache is enabled", ESP_ERR_INVALID_STATE);

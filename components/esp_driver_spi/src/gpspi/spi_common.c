@@ -859,6 +859,13 @@ esp_err_t spi_bus_initialize(spi_host_device_t host_id, const spi_bus_config_t *
         esp_cache_get_alignment(MALLOC_CAP_DMA, &bus_attr->cache_align_int);
         esp_cache_get_alignment(MALLOC_CAP_SPIRAM, &bus_attr->cache_align_ext);
     }
+#ifdef MICROPY_QEMU
+    /* QEMU: Allow larger transfers without DMA since QEMU doesn't have
+     * the real hardware buffer limitation */
+    if (!bus_attr->dma_enabled && bus_config->max_transfer_sz) {
+        bus_attr->max_transfer_sz = bus_config->max_transfer_sz;
+    }
+#endif
 
     spi_bus_lock_config_t lock_config = {
         .host_id = host_id,
