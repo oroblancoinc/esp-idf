@@ -854,7 +854,13 @@ esp_err_t spi_bus_initialize(spi_host_device_t host_id, const spi_bus_config_t *
 #endif
     } else {
         bus_attr->dma_enabled = 0;
+#ifdef MICROPY_QEMU
+        /* QEMU: Allow larger transfers without DMA since QEMU doesn't have
+         * the real hardware buffer limitation */
+        bus_attr->max_transfer_sz = bus_config->max_transfer_sz ? bus_config->max_transfer_sz : SOC_SPI_MAXIMUM_BUFFER_SIZE;
+#else
         bus_attr->max_transfer_sz = SOC_SPI_MAXIMUM_BUFFER_SIZE;
+#endif
     }
 
     spi_bus_lock_config_t lock_config = {

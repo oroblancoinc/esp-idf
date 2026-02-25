@@ -125,7 +125,16 @@ static uint32_t read_cal_channel(adc_unit_t adc_n)
     adc_oneshot_ll_start(adc_n);
 #endif
 
+#ifdef MICROPY_QEMU
+    /* QEMU: Add timeout to prevent infinite loop when ADC hardware is not available */
+    int timeout = 5000;
+    while(!adc_oneshot_ll_get_event(event) && --timeout > 0);
+    if (timeout == 0) {
+        return -1;
+    }
+#else
     while(!adc_oneshot_ll_get_event(event));
+#endif
 
     uint32_t read_val = -1;
     read_val = adc_oneshot_ll_get_raw_result(adc_n);

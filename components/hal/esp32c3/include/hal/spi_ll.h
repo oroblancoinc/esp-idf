@@ -431,8 +431,21 @@ static inline void spi_ll_write_buffer(spi_dev_t *hw, const uint8_t *buffer_to_s
     for (int x = 0; x < bitlen; x += 32) {
         //Use memcpy to get around alignment issues for txdata
         uint32_t word;
+        int idx = x / 32;
         memcpy(&word, &buffer_to_send[x / 8], 4);
-        hw->data_buf[(x / 32)] = word;
+#ifdef MICROPY_QEMU
+        /* QEMU: For large CPU mode transfers (>64 bytes), indices 16+ use
+         * extended W registers at offset 0x100 from the SPI base address.
+         * This is a QEMU extension - real hardware doesn't support this. */
+        if (idx < 16) {
+            hw->data_buf[idx] = word;
+        } else {
+            volatile uint32_t *ext_buf = (volatile uint32_t *)((uintptr_t)hw + 0x100);
+            ext_buf[idx - 16] = word;
+        }
+#else
+        hw->data_buf[idx] = word;
+#endif
     }
 }
 
@@ -482,7 +495,21 @@ static inline void spi_ll_read_buffer(spi_dev_t *hw, uint8_t *buffer_to_rcv, siz
 {
     for (int x = 0; x < bitlen; x += 32) {
         //Do a memcpy to get around possible alignment issues in rx_buffer
-        uint32_t word = hw->data_buf[x / 32];
+        uint32_t word;
+        int idx = x / 32;
+#ifdef MICROPY_QEMU
+        /* QEMU: For large CPU mode transfers (>64 bytes), indices 16+ use
+         * extended W registers at offset 0x100 from the SPI base address.
+         * This is a QEMU extension - real hardware doesn't support this. */
+        if (idx < 16) {
+            word = hw->data_buf[idx];
+        } else {
+            volatile uint32_t *ext_buf = (volatile uint32_t *)((uintptr_t)hw + 0x100);
+            word = ext_buf[idx - 16];
+        }
+#else
+        word = hw->data_buf[idx];
+#endif
         int len = bitlen - x;
         if (len > 32) {
             len = 32;
