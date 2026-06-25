@@ -23,19 +23,6 @@
 #include "soc/soc_memory_layout.h"
 #include "esp_private/esp_cache_private.h"
 
-/*
- * QEMU compatibility mode: When MICROPY_QEMU is defined, use polling mode
- * for SPI transactions and skip CRC verification since QEMU's ssi-sd model
- * doesn't support DMA/interrupts and may not send proper CRCs.
- */
-#ifdef MICROPY_QEMU
-#define SDSPI_USE_POLLING 1
-#define SDSPI_SKIP_CRC_CHECK 1
-#else
-#define SDSPI_USE_POLLING 0
-#define SDSPI_SKIP_CRC_CHECK 0
-#endif
-
 /// Max number of transactions in flight (used in start_command_write_blocks)
 #define SDSPI_TRANSACTION_COUNT 4
 #define SDSPI_MOSI_IDLE_VAL     0xff    //!< Data value which causes MOSI to stay high
@@ -641,17 +628,11 @@ static esp_err_t poll_busy(slot_info_t *slot, int timeout_ms, bool polling)
     do {
         t_rx = SDSPI_MOSI_IDLE_VAL;
         t.rx_data[0] = 0;
-#if SDSPI_USE_POLLING
-        /* QEMU: Always use polling mode */
-        (void)polling;
-        ret = spi_device_polling_transmit(slot->spi_handle, &t);
-#else
         if (polling) {
             ret = spi_device_polling_transmit(slot->spi_handle, &t);
         } else {
             ret = spi_device_transmit(slot->spi_handle, &t);
         }
-#endif
         if (ret != ESP_OK) {
             return ret;
         }
@@ -845,12 +826,7 @@ static esp_err_t start_command_read_blocks(slot_info_t *slot, sdspi_hw_cmd_t *cm
             .tx_buffer = rx_data
         };
 
-#if SDSPI_USE_POLLING
-        /* QEMU: Use polling mode */
-        ret = spi_device_polling_transmit(slot->spi_handle, &t_data);
-#else
         ret = spi_device_transmit(slot->spi_handle, &t_data);
-#endif
         if (ret != ESP_OK) {
             return ret;
         }
@@ -870,10 +846,6 @@ static esp_err_t start_command_read_blocks(slot_info_t *slot, sdspi_hw_cmd_t *cm
         }
 
         // compute CRC of the received data
-#if SDSPI_SKIP_CRC_CHECK
-        /* QEMU: Skip CRC verification - QEMU's ssi-sd may not send proper CRCs */
-        (void)crc;
-#else
         uint16_t crc_of_data = 0;
         if (slot->data_crc_enabled) {
             crc_of_data = sdspi_crc16(data, will_receive + extra_data_size);
@@ -883,7 +855,6 @@ static esp_err_t start_command_read_blocks(slot_info_t *slot, sdspi_hw_cmd_t *cm
                 return ESP_ERR_INVALID_CRC;
             }
         }
-#endif
 
         data += will_receive + extra_data_size;
         rx_length -= will_receive + extra_data_size;
@@ -977,12 +948,7 @@ static esp_err_t start_command_write_blocks(slot_info_t *slot, sdspi_hw_cmd_t *c
             .length = will_send * 8,
             .tx_buffer = tx_data,
         };
-#if SDSPI_USE_POLLING
-        /* QEMU: Use polling mode */
-        ret = spi_device_polling_transmit(slot->spi_handle, &t_data);
-#else
         ret = spi_device_transmit(slot->spi_handle, &t_data);
-#endif
         if (ret != ESP_OK) {
             return ret;
         }

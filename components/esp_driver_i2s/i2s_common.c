@@ -1349,21 +1349,6 @@ esp_err_t i2s_channel_write(i2s_chan_handle_t handle, const void *src, size_t si
     I2S_NULL_POINTER_CHECK(TAG, handle);
     ESP_RETURN_ON_FALSE(handle->dir == I2S_DIR_TX, ESP_ERR_INVALID_ARG, TAG, "this channel is not tx channel");
 
-#ifdef MICROPY_QEMU
-    // In QEMU, there's no real I2S/DMA hardware, so the DMA callbacks never fire
-    // and i2s_channel_write would block indefinitely waiting for the msg_queue.
-    // Simulate a write by delaying proportionally to the data size (like real DMA would).
-    // At 44100Hz stereo 16-bit = 176400 bytes/sec, so delay_ms = size * 1000 / 176400
-    // Use a minimum of 1ms to ensure task switch.
-    uint32_t delay_ms = (size * 1000) / 176400;
-    if (delay_ms < 1) delay_ms = 1;
-    vTaskDelay(pdMS_TO_TICKS(delay_ms));
-    if (bytes_written) {
-        *bytes_written = size;
-    }
-    return ESP_OK;
-#endif
-
     esp_err_t ret = ESP_OK;
     char *data_ptr;
     char *src_byte;
